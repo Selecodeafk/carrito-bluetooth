@@ -28,7 +28,8 @@ import java.util.UUID;
 
 public class MainActivity extends Activity {
 
-    private static final int REQUEST_BLUETOOTH_CONNECT = 100;
+    private static final int REQUEST_BLUETOOTH_PERMISSIONS = 100;
+
     private static final UUID SPP_UUID =
             UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
@@ -50,7 +51,7 @@ public class MainActivity extends Activity {
 
         setContentView(buildInterface());
 
-        requestBluetoothPermissionIfNeeded();
+        requestBluetoothPermissionsIfNeeded();
         loadPairedDevices();
     }
 
@@ -69,7 +70,6 @@ public class MainActivity extends Activity {
         scrollView.addView(root);
 
         TextView title = new TextView(this);
-
         title.setText("Control Carrito Bluetooth");
         title.setTextSize(24);
         title.setTextColor(Color.BLACK);
@@ -79,11 +79,9 @@ public class MainActivity extends Activity {
         root.addView(title, matchWrap());
 
         TextView instruction = new TextView(this);
-
         instruction.setText(
                 "Empareja primero el HC-05 desde Ajustes de Android y luego selecciónalo aquí."
         );
-
         instruction.setTextSize(15);
         instruction.setGravity(Gravity.CENTER);
         instruction.setPadding(0, 0, 0, gap);
@@ -113,7 +111,6 @@ public class MainActivity extends Activity {
         root.addView(connect, matchWrapWithTop(gap));
 
         statusText = new TextView(this);
-
         statusText.setText("Estado: desconectado");
         statusText.setTextSize(16);
         statusText.setGravity(Gravity.CENTER);
@@ -122,11 +119,9 @@ public class MainActivity extends Activity {
         root.addView(statusText, matchWrap());
 
         TextView controls = new TextView(this);
-
         controls.setText(
                 "Mantén presionada una dirección. Al soltar, envía STOP."
         );
-
         controls.setTextSize(15);
         controls.setGravity(Gravity.CENTER);
         controls.setPadding(0, 0, 0, gap);
@@ -140,7 +135,6 @@ public class MainActivity extends Activity {
         root.addView(forward, squareParams(90));
 
         LinearLayout middle = new LinearLayout(this);
-
         middle.setOrientation(LinearLayout.HORIZONTAL);
         middle.setGravity(Gravity.CENTER);
 
@@ -157,11 +151,9 @@ public class MainActivity extends Activity {
         middle.addView(left, squareParams(90));
 
         LinearLayout.LayoutParams stopParams = squareParams(100);
-
         stopParams.setMargins(gap, 0, gap, 0);
 
         middle.addView(stop, stopParams);
-
         middle.addView(right, squareParams(90));
 
         root.addView(middle, matchWrapWithTop(gap));
@@ -176,7 +168,6 @@ public class MainActivity extends Activity {
         );
 
         TextView speedTitle = new TextView(this);
-
         speedTitle.setText("Velocidad");
         speedTitle.setTextSize(18);
         speedTitle.setGravity(Gravity.CENTER);
@@ -185,12 +176,10 @@ public class MainActivity extends Activity {
         root.addView(speedTitle, matchWrap());
 
         LinearLayout speedRow1 = new LinearLayout(this);
-
         speedRow1.setOrientation(LinearLayout.HORIZONTAL);
         speedRow1.setGravity(Gravity.CENTER);
 
         LinearLayout speedRow2 = new LinearLayout(this);
-
         speedRow2.setOrientation(LinearLayout.HORIZONTAL);
         speedRow2.setGravity(Gravity.CENTER);
 
@@ -240,21 +229,30 @@ public class MainActivity extends Activity {
         return scrollView;
     }
 
-    private void requestBluetoothPermissionIfNeeded() {
+    private void requestBluetoothPermissionsIfNeeded() {
 
-        if (
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                checkSelfPermission(
-                        Manifest.permission.BLUETOOTH_CONNECT
-                ) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
 
-            requestPermissions(
-                    new String[]{
+            boolean connectGranted =
+                    checkSelfPermission(
                             Manifest.permission.BLUETOOTH_CONNECT
-                    },
-                    REQUEST_BLUETOOTH_CONNECT
-            );
+                    ) == PackageManager.PERMISSION_GRANTED;
+
+            boolean scanGranted =
+                    checkSelfPermission(
+                            Manifest.permission.BLUETOOTH_SCAN
+                    ) == PackageManager.PERMISSION_GRANTED;
+
+            if (!connectGranted || !scanGranted) {
+
+                requestPermissions(
+                        new String[]{
+                                Manifest.permission.BLUETOOTH_CONNECT,
+                                Manifest.permission.BLUETOOTH_SCAN
+                        },
+                        REQUEST_BLUETOOTH_PERMISSIONS
+                );
+            }
         }
     }
 
@@ -271,12 +269,9 @@ public class MainActivity extends Activity {
                 grantResults
         );
 
-        if (requestCode == REQUEST_BLUETOOTH_CONNECT) {
+        if (requestCode == REQUEST_BLUETOOTH_PERMISSIONS) {
 
-            if (
-                    grantResults.length > 0 &&
-                    grantResults[0] == PackageManager.PERMISSION_GRANTED
-            ) {
+            if (hasBluetoothPermissions()) {
 
                 loadPairedDevices();
 
@@ -284,20 +279,30 @@ public class MainActivity extends Activity {
 
                 Toast.makeText(
                         this,
-                        "Se necesita permiso de dispositivos cercanos para conectar con el HC-05.",
+                        "Se necesitan permisos de Bluetooth y dispositivos cercanos.",
                         Toast.LENGTH_LONG
                 ).show();
             }
         }
     }
 
-    private boolean hasBluetoothPermission() {
+    private boolean hasBluetoothPermissions() {
 
-        return
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return true;
+        }
+
+        boolean connectGranted =
                 checkSelfPermission(
                         Manifest.permission.BLUETOOTH_CONNECT
                 ) == PackageManager.PERMISSION_GRANTED;
+
+        boolean scanGranted =
+                checkSelfPermission(
+                        Manifest.permission.BLUETOOTH_SCAN
+                ) == PackageManager.PERMISSION_GRANTED;
+
+        return connectGranted && scanGranted;
     }
 
     private void loadPairedDevices() {
@@ -316,10 +321,10 @@ public class MainActivity extends Activity {
             return;
         }
 
-        if (!hasBluetoothPermission()) {
+        if (!hasBluetoothPermissions()) {
 
             deviceLabels.add(
-                    "Concede permiso de Bluetooth"
+                    "Concede permisos de Bluetooth"
             );
 
             updateSpinner();
@@ -385,9 +390,9 @@ public class MainActivity extends Activity {
 
     private void connectSelectedDevice() {
 
-        if (!hasBluetoothPermission()) {
+        if (!hasBluetoothPermissions()) {
 
-            requestBluetoothPermissionIfNeeded();
+            requestBluetoothPermissionsIfNeeded();
 
             return;
         }
@@ -617,7 +622,12 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
 
-        sendCommand('S');
+        if (
+                bluetoothSocket != null &&
+                bluetoothSocket.isConnected()
+        ) {
+            sendCommand('S');
+        }
 
         closeConnection();
 
@@ -691,9 +701,9 @@ public class MainActivity extends Activity {
 
         return Math.round(
                 value *
-                getResources()
-                        .getDisplayMetrics()
-                        .density
+                        getResources()
+                                .getDisplayMetrics()
+                                .density
         );
     }
 }
